@@ -1,15 +1,15 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser"; // 📌 Adicionado
 import { ApolloServer } from "@apollo/server";
-import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
 import { expressMiddleware } from "@apollo/server/express4";
 import { makeExecutableSchema } from "@graphql-tools/schema";
-import { WebSocketServer } from "ws";
-import { useServer } from "graphql-ws/lib/use/ws";
+import { mergeTypeDefs, mergeResolvers } from "@graphql-tools/merge";
 import http from "http";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { mergeTypeDefs, mergeResolvers } from "@graphql-tools/merge";
+import { WebSocketServer } from "ws";
+import { useServer } from "graphql-ws/lib/use/ws";
 import userTypeDef from "./graphql/typeDefs/user.typeDef.js";
 import cardTypeDef from "./graphql/typeDefs/card.typeDef.js";
 import addressTypeDef from "./graphql/typeDefs/address.typeDef.js";
@@ -19,7 +19,6 @@ import addressResolver from "./graphql/resolvers/address.resolver.js";
 
 dotenv.config();
 
-// Conexão com MongoDB
 const MONGODB_URI = process.env.MONGO_DB;
 console.log("Conectando ao MongoDB...");
 
@@ -29,6 +28,7 @@ mongoose
   .catch((error) => console.error("❌ Erro ao conectar ao MongoDB:", error));
 
 const app = express();
+app.use(cookieParser()); // 📌 Adicionado para ler cookies
 
 // Configurar CORS corretamente
 const allowedOrigins = [
@@ -40,7 +40,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: allowedOrigins,
-    credentials: true,
+    credentials: true, // 📌 Permite cookies na requisição
   })
 );
 
@@ -55,38 +55,20 @@ const schema = makeExecutableSchema({
 // Criar servidor HTTP
 const httpServer = http.createServer(app);
 
-// Criar servidor WebSocket
-const wsServer = new WebSocketServer({
-  server: httpServer,
-  path: "/graphql",
-});
-
-const serverCleanup = useServer({ schema }, wsServer);
-
 // Criar Apollo Server
 const server = new ApolloServer({
   schema,
-  plugins: [
-    ApolloServerPluginDrainHttpServer({ httpServer }),
-    {
-      async serverWillStart() {
-        return {
-          async drainServer() {
-            await serverCleanup.dispose();
-          },
-        };
-      },
-    },
-  ],
 });
 
-// Iniciar o Apollo Server
 const startServer = async () => {
   await server.start();
   app.use(
     "/graphql",
     expressMiddleware(server, {
-      context: async ({ req, res }) => ({ req, res }),
+      context: async ({ req, res }) => {
+        const token = req.cookies.access_token; // 📌 Agora ele pode ler o token do cookie
+        return { req, res, token };
+      },
     })
   );
 };
