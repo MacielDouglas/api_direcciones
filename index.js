@@ -19,94 +19,83 @@ import addressResolver from "./graphql/resolvers/address.resolver.js";
 
 dotenv.config();
 
+// Conexão com MongoDB
 const MONGODB_URI = process.env.MONGO_DB;
-console.log("Conectando ao MongoDB....");
+console.log("Conectando ao MongoDB...");
 
 mongoose
   .connect(MONGODB_URI)
-  .then(() => {
-    console.log("Conectado ao MongoDB");
-  })
-  .catch((error) => {
-    console.log("Erro de conexão com MongoDB: ", error.message);
-  });
+  .then(() => console.log("✅ Conectado ao MongoDB"))
+  .catch((error) => console.error("❌ Erro ao conectar ao MongoDB:", error));
 
 const app = express();
 
-const mergedTypeDefs = mergeTypeDefs([
-  userTypeDef,
-  cardTypeDef,
-  addressTypeDef,
-]);
+// Configurar CORS corretamente
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://direcciones.vercel.app",
+  "https://apidirecciones-production.up.railway.app",
+];
 
-const mergedResolvers = mergeResolvers([
-  userResolver,
-  cardResolver,
-  addressResolver,
-]);
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
 
-const startServer = async () => {
-  const httpServer = http.createServer(app);
+app.use(express.json());
 
-  const wsServer = new WebSocketServer({
-    server: httpServer,
-    path: "/graphql",
-  });
-
-  const schema = makeExecutableSchema({
-    typeDefs: mergedTypeDefs,
-    resolvers: mergedResolvers,
-  });
-
-  const serverCleanup = useServer({ schema }, wsServer);
-
-  const server = new ApolloServer({
-    schema,
-    plugins: [
-      ApolloServerPluginDrainHttpServer({ httpServer }),
-      {
-        async serverWillStart() {
-          return {
-            async drainServer() {
-              await serverCleanup.dispose();
-            },
-          };
-        },
-      },
-    ],
-  });
-
-  await server.start();
-
-  app.use(
-    "/graphql",
-    cors({
-      origin: [
-        "http://localhost:5173",
-        "https://direcciones.vercel.app",
-        "https://apidirecciones-production.up.railway.app",
-      ],
-      credentials: true,
-    }),
-    express.json(),
-    expressMiddleware(server, {
-      context: ({ req, res }) => ({ req, res }),
-    })
-  );
-
-  return httpServer;
-};
-
-const PORT = process.env.PORT || 4000;
-
-startServer().then((httpServer) => {
-  httpServer.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}/graphql`);
-  });
+// Unir os TypeDefs e Resolvers
+const schema = makeExecutableSchema({
+  typeDefs: mergeTypeDefs([userTypeDef, cardTypeDef, addressTypeDef]),
+  resolvers: mergeResolvers([userResolver, cardResolver, addressResolver]),
 });
 
-// // Exporta para ser utilizado no Vercel
-// export default async (req, res) => {
-//   const httpServer = await startServer();
-//   httpServer.emit("request", req, res);
-// };
+// Criar servidor HTTP
+const httpServer = http.createServer(app);
+
+// Criar servidor WebSocket
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  path: "/graphql",
+});
+
+const serverCleanup = useServer({ schema }, wsServer);
+
+// Criar Apollo Server
+const server = new ApolloServer({
+  schema,
+  plugins: [
+    ApolloServerPluginDrainHttpServer({ httpServer }),
+    {
+      async serverWillStart() {
+        return {
+          async drainServer() {
+            await serverCleanup.dispose();
+          },
+        };
+      },
+    },
+  ],
+});
+
+// Iniciar o Apollo Server
+const startServer = async () => {
+  await server.start();
+  app.use(
+    "/graphql",
+    expressMiddleware(server, {
+      context: async ({ req, res }) => ({ req, res }),
+    })
+  );
+};
+
+startServer()
+  .then(() => {
+    const PORT = process.env.PORT || 4000;
+    httpServer.listen(PORT, () => {
+      console.log(`🚀 Servidor rodando em http://localhost:${PORT}/graphql`);
+    });
+  })
+  .catch((err) => console.error("❌ Erro ao iniciar servidor:", err));
