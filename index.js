@@ -31,16 +31,27 @@ const app = express();
 app.use(cookieParser()); // 📌 Adicionado para ler cookies
 
 // Configurar CORS corretamente
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://direcciones.vercel.app",
-  "https://apidirecciones-production.up.railway.app",
-];
+// const allowedOrigins = [
+//   "http://localhost:5173",
+//   "https://direcciones.vercel.app",
+//   "https://apidirecciones-production.up.railway.app",
+// ];
+
+// app.use(
+//   cors({
+//     origin: allowedOrigins,
+//     credentials: true, // 📌 Permite cookies na requisição
+//   })
+// );
 
 app.use(
   cors({
-    origin: allowedOrigins,
-    credentials: true, // 📌 Permite cookies na requisição
+    origin: [
+      "http://localhost:5173",
+      "https://direcciones.vercel.app",
+      "https://apidirecciones-production.up.railway.app",
+    ],
+    credentials: true, // 🔥 ESSENCIAL para permitir cookies
   })
 );
 
