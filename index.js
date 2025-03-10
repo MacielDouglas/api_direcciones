@@ -97,7 +97,8 @@ const startServer = async () => {
   return httpServer;
 };
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 4000;
+
 startServer().then((httpServer) => {
   httpServer.listen(PORT, () => {
     console.log(`Servidor rodando em http://localhost:${PORT}/graphql`);
