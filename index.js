@@ -81,7 +81,11 @@ const startServer = async () => {
   app.use(
     "/graphql",
     cors({
-      origin: ["http://localhost:5173", "https://direcciones.vercel.app"],
+      origin: [
+        "http://localhost:5173",
+        "https://direcciones.vercel.app",
+        "https://apidirecciones-production.up.railway.app",
+      ],
       credentials: true,
     }),
     express.json(),
@@ -93,20 +97,15 @@ const startServer = async () => {
   return httpServer;
 };
 
-// Condição para rodar em modo local
-if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.PORT || 8000;
-  startServer().then((httpServer) => {
-    httpServer.listen(PORT, () => {
-      console.log(
-        `Servidor rodando localmente em http://localhost:${PORT}/graphql`
-      );
-    });
+const PORT = process.env.PORT || 8000;
+startServer().then((httpServer) => {
+  httpServer.listen(PORT, () => {
+    console.log(`Servidor rodando em http://localhost:${PORT}/graphql`);
   });
-}
+});
 
-// Exporta para ser utilizado no Vercel
-export default async (req, res) => {
-  const httpServer = await startServer();
-  httpServer.emit("request", req, res);
-};
+// // Exporta para ser utilizado no Vercel
+// export default async (req, res) => {
+//   const httpServer = await startServer();
+//   httpServer.emit("request", req, res);
+// };
