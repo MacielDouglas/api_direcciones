@@ -4,7 +4,7 @@ import Address from "../../models/address.models.js";
 import bcrypt from "bcryptjs";
 import {
   createToken,
-  existing,
+  // existing,
   hashToNumbers,
   sanitizeUser,
   setTokenCookie,
