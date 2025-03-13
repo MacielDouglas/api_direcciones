@@ -4,43 +4,58 @@ import Address from "../../models/address.models.js";
 import {
   findCardById,
   findNextNumber,
+  notifyClients,
+  sendUpdatedCards,
   validateObjectId,
   verifyAuthorization,
 } from "../../utils/utils.js";
-import { PubSub } from "graphql-subscriptions";
 
-const pubsub = new PubSub();
-const CARD_UPDATED = "CARD_UPDATED";
+// Função para buscar e enviar os cartões atualizados
+// export const sendUpdatedCards = async (res) => {
+//   try {
+//     const cards = (await Card.find({}).lean()) || [];
+//     const cardsWithAddresses = await Promise.all(
+//       cards.map(async (card) => {
+//         const addresses = await Address.find({
+//           _id: { $in: card.street || [] },
+//         }).lean();
 
-const sendUpdatedCards = async () => {
-  const cards = (await Card.find({}).lean()) || [];
-  const cardsWithAddresses = await Promise.all(
-    cards.map(async (card) => {
-      const addresses = await Address.find({
-        _id: { $in: card.street || [] },
-      }).lean();
+//         return {
+//           ...card,
+//           id: card._id.toString(),
+//           street: addresses.map((address) => ({
+//             ...address,
+//             id: address._id.toString(),
+//           })),
+//         };
+//       })
+//     );
 
-      return {
-        ...card,
-        id: card._id.toString(),
-        street: addresses.map((address) => ({
-          ...address,
-          id: address._id.toString(),
-        })),
-      };
-    })
-  );
-  pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
-  return cardsWithAddresses; // Adiciona o retorno para a lista de cards
-};
+//     console.log(res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`));
+
+//     // Envia os cartões atualizados via SSE
+//     if (res) {
+//       res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`);
+//     }
+
+//     return cardsWithAddresses;
+//   } catch (error) {
+//     console.error("Erro ao buscar cartões:", error.message);
+//     if (res) {
+//       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+//     }
+//     return [];
+//   }
+// };
 
 const cardResolver = {
   Query: {
     card: async (_, __, { req }) => {
       try {
         verifyAuthorization(req);
-        const cards = await sendUpdatedCards(); // Chama a função, mas capture o valor.
-        return cards || []; // Garante que um valor válido seja retornado (mesmo que seja uma lista vazia).
+        const cards = await sendUpdatedCards(); // Busca os cartões sem enviar SSE
+        await notifyClients();
+        return cards || [];
       } catch (error) {
         throw new Error(`Erro ao buscar cartões: ${error.message}`);
       }
@@ -62,7 +77,7 @@ const cardResolver = {
         });
         await card.save();
 
-        await sendUpdatedCards();
+        await notifyClients(); // Atualiza os cartões
         return { message: "Cartão criado com sucesso.", success: true, card };
       } catch (error) {
         return {
@@ -81,17 +96,15 @@ const cardResolver = {
         const card = await findCardById(id);
         if (!card) throw new Error("Cartão não encontrado.");
 
-        let updatedStreet = [...card.street]; // Mantém os valores existentes
+        let updatedStreet = [...card.street];
 
         if (street && Array.isArray(street)) {
           for (const streetId of street) {
             validateObjectId(streetId);
 
-            // Remove o ID do campo street se já estiver no cartão
             if (updatedStreet.includes(streetId)) {
               updatedStreet = updatedStreet.filter((sId) => sId !== streetId);
             } else {
-              // Verifica se o ID está em outro cartão, ignorando o próprio
               const existingCard = await Card.findOne({
                 street: streetId,
                 _id: { $ne: id },
@@ -101,16 +114,13 @@ const cardResolver = {
                   `O endereço ${streetId} já está vinculado a outro cartão.`
                 );
               }
-              // Se não está em outro cartão, adiciona
               updatedStreet.push(streetId);
             }
           }
         }
 
-        // Remove duplicatas de street
         updatedStreet = [...new Set(updatedStreet)];
 
-        // Se a lista de `street` estiver vazia, deletar o cartão
         if (updatedStreet.length === 0) {
           await Card.findByIdAndDelete(id);
           return {
@@ -120,14 +130,15 @@ const cardResolver = {
           };
         }
 
-        // Atualiza o cartão com a nova lista de endereços
         const updatedCard = await Card.findByIdAndUpdate(
           id,
           { street: updatedStreet },
           { new: true }
         );
 
-        await sendUpdatedCards();
+        await notifyClients();
+
+        // await sendUpdatedCards(); // Atualiza os cartões
         return {
           message: "Cartão atualizado.",
           success: true,
@@ -146,7 +157,7 @@ const cardResolver = {
         verifyAuthorization(req);
         validateObjectId(id);
         await Card.deleteOne({ _id: id });
-        await sendUpdatedCards();
+        await sendUpdatedCards(); // Atualiza os cartões
         return { message: "Cartão deletado.", success: true };
       } catch (error) {
         return {
@@ -186,7 +197,6 @@ const cardResolver = {
 
         const currentDate = new Date().toISOString();
 
-        // Verificar e atualizar múltiplos cartões
         const updatedCards = await Promise.all(
           cardIds.map(async (cardId) => {
             const card = await Card.findById(cardId);
@@ -194,44 +204,40 @@ const cardResolver = {
               throw new Error(`Cartão com ID ${cardId} não encontrado.`);
             }
 
-            // Verificar se o cartão já está em uso (startDate não é null)
             if (card.startDate !== null) {
               throw new Error(`Cartão com ID ${cardId} já está em uso.`);
             }
 
-            // Atualizar o cartão e garantir que ele seja retornado com o campo 'id' válido
             const updatedCard = await Card.findByIdAndUpdate(
               cardId,
               {
                 $set: {
-                  startDate: currentDate, // Definir o startDate para a data atual
-                  endDate: null, // Garantir que o endDate é null
+                  startDate: currentDate,
+                  endDate: null,
                 },
                 $push: {
                   usersAssigned: { userId, date: currentDate },
                 },
               },
-              { new: true } // Retorna o documento atualizado
+              { new: true }
             );
 
-            // Se o cartão não foi encontrado ou atualizado corretamente
             if (!updatedCard || !updatedCard._id) {
               throw new Error(`Erro ao atualizar o cartão com ID ${cardId}.`);
             }
 
-            // Converter o _id para uma string antes de retornar
             updatedCard.id = updatedCard._id.toString();
-            delete updatedCard._id; // Remover o _id original, pois já estamos usando 'id'
+            delete updatedCard._id;
 
-            return updatedCard; // Retorna o cartão atualizado com o campo 'id' como string
+            return updatedCard;
           })
         );
 
-        await sendUpdatedCards();
+        await notifyClients(); // Atualiza os cartões
         return {
           message: `Cartões designados para o usuário ${user.name}.`,
           success: true,
-          card: updatedCards, // Retorna a lista de cartões atualizados
+          card: updatedCards,
         };
       } catch (error) {
         return {
@@ -259,25 +265,23 @@ const cardResolver = {
 
         const currentDate = new Date().toISOString();
 
-        // Atualizar o cartão para indicar a devolução
         const cardReturn = await Card.findByIdAndUpdate(
           cardId,
           {
             $set: {
               startDate: null,
               endDate: currentDate,
-              usersAssigned: [], // Garantir que usersAssigned seja uma lista vazia
+              usersAssigned: [],
             },
           },
-          { new: true } // Retorna o cartão atualizado
+          { new: true }
         );
 
-        // Retornar o cartão como um item em uma lista
-        await sendUpdatedCards();
+        await notifyClients(); // Atualiza os cartões
         return {
           message: "Cartão devolvido com sucesso.",
           success: true,
-          card: cardReturn, // Coloca o cartão em uma lista para atender à expectativa do GraphQL
+          card: cardReturn,
         };
       } catch (error) {
         return {
@@ -285,12 +289,6 @@ const cardResolver = {
           success: false,
         };
       }
-    },
-  },
-
-  Subscription: {
-    card: {
-      subscribe: () => pubsub.asyncIterator([CARD_UPDATED]),
     },
   },
 };
@@ -306,36 +304,40 @@ export default cardResolver;
 //   validateObjectId,
 //   verifyAuthorization,
 // } from "../../utils/utils.js";
+// import { PubSub } from "graphql-subscriptions";
+
+// const pubsub = new PubSub();
+// const CARD_UPDATED = "CARD_UPDATED";
+
+// const sendUpdatedCards = async () => {
+//   const cards = (await Card.find({}).lean()) || [];
+//   const cardsWithAddresses = await Promise.all(
+//     cards.map(async (card) => {
+//       const addresses = await Address.find({
+//         _id: { $in: card.street || [] },
+//       }).lean();
+
+//       return {
+//         ...card,
+//         id: card._id.toString(),
+//         street: addresses.map((address) => ({
+//           ...address,
+//           id: address._id.toString(),
+//         })),
+//       };
+//     })
+//   );
+//   pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
+//   return cardsWithAddresses; // Adiciona o retorno para a lista de cards
+// };
 
 // const cardResolver = {
 //   Query: {
 //     card: async (_, __, { req }) => {
 //       try {
-//         const decodedToken = verifyAuthorization(req);
-//         if (!decodedToken) throw new Error("Você não tem permissão.");
-
-//         const cards = (await Card.find({}).lean()) || []; // ✅ Garante um array mesmo se não houver registros
-
-//         const cardsWithAddresses = await Promise.all(
-//           cards.map(async (card) => {
-//             const addresses = await Address.find({
-//               _id: { $in: card.street || [] },
-//             }).lean();
-
-//             const formattedAddresses = addresses.map((address) => ({
-//               ...address,
-//               id: address._id.toString(), // ✅ Garante que `id` seja uma string válida
-//             }));
-
-//             return {
-//               ...card,
-//               id: card._id.toString(),
-//               street: formattedAddresses || [], // ✅ Garante um array válido
-//             };
-//           })
-//         );
-
-//         return cardsWithAddresses.length ? cardsWithAddresses : []; // ✅ Garante um array válido sempre
+//         verifyAuthorization(req);
+//         const cards = await sendUpdatedCards(); // Chama a função, mas capture o valor.
+//         return cards || []; // Garante que um valor válido seja retornado (mesmo que seja uma lista vazia).
 //       } catch (error) {
 //         throw new Error(`Erro ao buscar cartões: ${error.message}`);
 //       }
@@ -357,6 +359,7 @@ export default cardResolver;
 //         });
 //         await card.save();
 
+//         await sendUpdatedCards();
 //         return { message: "Cartão criado com sucesso.", success: true, card };
 //       } catch (error) {
 //         return {
@@ -368,11 +371,9 @@ export default cardResolver;
 
 //     updateCard: async (_, { updateCardInput }, { req }) => {
 //       try {
+//         verifyAuthorization(req);
 //         const { id, street } = updateCardInput;
 //         validateObjectId(id);
-
-//         const decodedToken = verifyAuthorization(req);
-//         if (!decodedToken) throw new Error("Você não tem permissão.");
 
 //         const card = await findCardById(id);
 //         if (!card) throw new Error("Cartão não encontrado.");
@@ -423,6 +424,7 @@ export default cardResolver;
 //           { new: true }
 //         );
 
+//         await sendUpdatedCards();
 //         return {
 //           message: "Cartão atualizado.",
 //           success: true,
@@ -438,14 +440,10 @@ export default cardResolver;
 
 //     deleteCard: async (_, { id }, { req }) => {
 //       try {
+//         verifyAuthorization(req);
 //         validateObjectId(id);
-//         const decodedToken = verifyAuthorization(req);
-//         if (!decodedToken) throw new Error("Você não tem permissão.");
-
-//         const card = await findCardById(id);
-//         if (!card) throw new Error("Cartão não encontrado.");
-
 //         await Card.deleteOne({ _id: id });
+//         await sendUpdatedCards();
 //         return { message: "Cartão deletado.", success: true };
 //       } catch (error) {
 //         return {
@@ -526,13 +524,17 @@ export default cardResolver;
 //           })
 //         );
 
+//         await sendUpdatedCards();
 //         return {
 //           message: `Cartões designados para o usuário ${user.name}.`,
 //           success: true,
 //           card: updatedCards, // Retorna a lista de cartões atualizados
 //         };
 //       } catch (error) {
-//         throw new Error(`Erro ao designar cartões: ${error.message}`);
+//         return {
+//           message: `Erro ao designar cartões: ${error.message}`,
+//           success: false,
+//         };
 //       }
 //     },
 
@@ -568,6 +570,7 @@ export default cardResolver;
 //         );
 
 //         // Retornar o cartão como um item em uma lista
+//         await sendUpdatedCards();
 //         return {
 //           message: "Cartão devolvido com sucesso.",
 //           success: true,
@@ -577,9 +580,14 @@ export default cardResolver;
 //         return {
 //           message: `Erro ao devolver cartão: ${error.message}`,
 //           success: false,
-//           card: [], // Retorna uma lista vazia em caso de erro
 //         };
 //       }
+//     },
+//   },
+
+//   Subscription: {
+//     card: {
+//       subscribe: () => pubsub.asyncIterator([CARD_UPDATED]),
 //     },
 //   },
 // };

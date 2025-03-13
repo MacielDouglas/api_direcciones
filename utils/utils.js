@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import User from "../models/user.models.js";
 import Card from "../models/card.models.js";
+import Address from "../models/address.models.js";
 
 // ======= Funções de Utilidade de Usuário =======
 
@@ -173,4 +174,112 @@ export const hashToNumbers = async (
     }, 0) + min;
 
   return uniqueNumber;
+};
+
+export const clients = new Set(); // Armazena as conexões dos clientes
+
+// export const notifyClients = async () => {
+//   try {
+//     const cardsWithAddresses = await sendUpdatedCards(); // Busca os cartões atualizados
+
+//     // Envia os dados para todos os clientes conectados
+//     clients.forEach((res) => {
+//       res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`);
+//     });
+//   } catch (error) {
+//     console.error("Erro ao notificar clientes:", error.message);
+//   }
+// };
+
+export const notifyClients = async () => {
+  try {
+    const cardsWithAddresses = await sendUpdatedCards(); // Busca os cartões atualizados
+
+    // Envia os dados para todos os clientes conectados
+    clients.forEach((res) => {
+      if (res && typeof res.write === "function") {
+        res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`);
+      } else {
+        // Remove conexões inválidas
+        clients.delete(res);
+      }
+    });
+  } catch (error) {
+    console.error("Erro ao notificar clientes:", error.message);
+  }
+};
+
+// export const sendUpdatedCards = async (res) => {
+//   try {
+//     const cards = (await Card.find({}).lean()) || [];
+//     const cardsWithAddresses = await Promise.all(
+//       cards.map(async (card) => {
+//         const addresses = await Address.find({
+//           _id: { $in: card.street || [] },
+//         }).lean();
+
+//         return {
+//           ...card,
+//           id: card._id.toString(),
+//           street: addresses.map((address) => ({
+//             ...address,
+//             id: address._id.toString(),
+//           })),
+//         };
+//       })
+//     );
+
+//     console.log(res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`));
+
+//     // Envia os cartões atualizados via SSE
+//     if (res) {
+//       res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`);
+//     }
+
+//     return cardsWithAddresses;
+//   } catch (error) {
+//     console.error("Erro ao buscar cartões:", error.message);
+//     if (res) {
+//       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+//     }
+//     return [];
+//   }
+// };
+
+export const sendUpdatedCards = async (res = null) => {
+  try {
+    const cards = (await Card.find({}).lean()) || [];
+    const cardsWithAddresses = await Promise.all(
+      cards.map(async (card) => {
+        const addresses = await Address.find({
+          _id: { $in: card.street || [] },
+        }).lean();
+
+        return {
+          ...card,
+          id: card._id.toString(),
+          street: addresses.map((address) => ({
+            ...address,
+            id: address._id.toString(),
+          })),
+        };
+      })
+    );
+
+    // Envia os cartões atualizados via SSE (se res estiver definido)
+    if (res && typeof res.write === "function") {
+      res.write(`data: ${JSON.stringify(cardsWithAddresses)}\n\n`);
+    }
+
+    return cardsWithAddresses;
+  } catch (error) {
+    console.error("Erro ao buscar cartões:", error.message);
+
+    // Envia o erro via SSE (se res estiver definido)
+    if (res && typeof res.write === "function") {
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    }
+
+    return [];
+  }
 };
