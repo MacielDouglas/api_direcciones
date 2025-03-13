@@ -29,7 +29,7 @@ const userResolver = {
 
         return formattedUsers.filter((user) => user.id !== null); // ✅ Remove usuários sem `id`
       } catch (error) {
-        console.error("Erro ao buscar usuários:", error);
+        throw new Error("Erro ao buscar usuários:", error);
         return [];
       }
     },

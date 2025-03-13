@@ -45,7 +45,9 @@ type Mutation {
     returnCard(returnCardInput: ReturnCardInput!): CardMutationResponse
 }
 
-
+type Subscription {
+    card: [CardResponse]!
+}
 
  type CardResponse {
     id: ID!
