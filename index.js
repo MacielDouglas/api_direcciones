@@ -16,9 +16,9 @@ import { useServer } from "graphql-ws/use/ws";
 dotenv.config();
 
 const { MONGO_DB, NODE_ENV, CLIENT_ORIGIN } = process.env;
-const PORT = process.env.PORT || 4000; // Usar a porta do Railway ou 4000 localmente
+const PORT = process.env.PORT || 4000; // Porta do Railway ou 4000 localmente
 
-export const pubsub = new PubSub(); // Instância para Subscriptions
+export const pubsub = new PubSub(); // Instância do PubSub para Subscriptions
 
 // Conectar ao MongoDB
 const connectToDatabase = async () => {
@@ -27,12 +27,12 @@ const connectToDatabase = async () => {
     await mongoose.connect(MONGO_DB);
     console.log("✅ Conectado ao MongoDB");
   } catch (error) {
-    console.error("❌ Erro de conexão com MongoDB:", error.message);
+    console.error("❌ Erro ao conectar ao MongoDB:", error.message);
     process.exit(1);
   }
 };
 
-// Criar e configurar o Apollo Server
+// Criar o Apollo Server
 const createApolloServer = async () => {
   const schema = makeExecutableSchema({
     typeDefs: mergeTypeDefs(typeDefs),
@@ -50,75 +50,61 @@ const startServer = async () => {
   await connectToDatabase();
 
   const app = express();
-  app.use(express.json()); // Middleware para processar JSON corretamente
-  app.use(express.urlencoded({ extended: true })); // Para garantir que URL encoded também funcione
-  app.use(express.text()); // Para garantir que strings simples sejam processadas corretamente
-  app.use(express.raw()); // Apenas se necessário para binários
-
-  app.use((req, res, next) => {
-    res.setHeader("Content-Type", "application/json");
-    next();
-  });
-
   const httpServer = http.createServer(app);
   const { server, schema } = await createApolloServer();
 
-  // Configuração do WebSocket Server para Subscriptions (usando a mesma porta do HTTP)
+  // ⚡️ Melhorando Middleware para evitar Buffer
+  app.use(express.json()); // Apenas JSON
+  app.use(express.urlencoded({ extended: true })); // URL Encoded (opcional)
+
+  // 🔥 Removido `express.text()` e `express.raw()` (não são necessários)
+
+  // Configuração de CORS
+  const allowedOrigins = CLIENT_ORIGIN
+    ? CLIENT_ORIGIN.split(",")
+    : ["http://localhost:5173", "https://direcciones.vercel.app"];
+
+  app.use(
+    cors({
+      origin: allowedOrigins,
+      credentials: true,
+      methods: ["GET", "POST", "OPTIONS"], // 🔧 Garantindo suporte para GraphQL
+    })
+  );
+
+  // Middleware do Apollo Server
+  app.use(
+    "/graphql",
+    expressMiddleware(server, {
+      context: ({ req, res }) => ({ req, res, pubsub }),
+    })
+  );
+
+  // Rota de teste
+  app.get("/", (req, res) => res.json({ message: "✅ Servidor rodando!" }));
+
+  // Configuração do WebSocket para Subscriptions
   const wsServer = new WebSocketServer({
     server: httpServer,
     path: "/graphql",
-    perMessageDeflate: false,
-  });
-
-  wsServer.on("connection", (socket) => {
-    socket.on("message", (message) => {
-      // Verifique se a mensagem está sendo recebida corretamente
-      console.log(message);
-    });
+    perMessageDeflate: false, // Evita compressão desnecessária
   });
 
   useServer(
     {
       schema,
       context: async () => {
-        console.log("📡 Um novo cliente se conectou ao WebSocket");
+        console.log("📡 Cliente conectado ao WebSocket");
         return { pubsub };
       },
-      onConnect: () => console.log("✅ Cliente WebSocket conectado"),
-      onDisconnect: () => console.log("🔴 Cliente WebSocket desconectado"),
+      onConnect: () => console.log("✅ WebSocket conectado"),
+      onDisconnect: () => console.log("🔴 WebSocket desconectado"),
       keepAlive: 10000, // Mantém a conexão ativa a cada 10s
     },
     wsServer
   );
 
-  // Configuração de CORS para aceitar requisições do frontend
-  const allowedOrigins = CLIENT_ORIGIN
-    ? CLIENT_ORIGIN.split(",")
-    : ["http://localhost:5173", "https://direcciones.vercel.app"];
-
-  app.use(cors({ origin: allowedOrigins, credentials: true }));
-
-  app.use((req, res, next) => {
-    res.setHeader("Content-Type", "application/json");
-    next();
-  });
-
-  // Middleware para o Apollo Server
-  app.use(
-    "/graphql",
-    express.json(),
-    expressMiddleware(server, {
-      context: ({ req, res }) => {
-        res.setHeader("Content-Type", "application/json"); // Garante que todas as respostas são JSON
-        return { req, res, pubsub };
-      },
-    })
-  );
-
-  // Rota de teste para verificar se o servidor está rodando
-  app.get("/", (req, res) => res.send("✅ Servidor rodando!"));
-
-  // Iniciar HTTP e WebSocket na mesma porta
+  // Iniciar servidor HTTP e WebSocket na mesma porta
   httpServer.listen(PORT, () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
     console.log(`🔗 GraphQL: http://localhost:${PORT}/graphql`);
@@ -126,7 +112,7 @@ const startServer = async () => {
   });
 };
 
-// Iniciar o servidor automaticamente, sem chamar `startServer()` duas vezes
+// Iniciar o servidor
 startServer().catch((err) =>
   console.error("❌ Erro ao iniciar o servidor:", err)
 );

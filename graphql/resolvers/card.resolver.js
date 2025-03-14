@@ -30,7 +30,20 @@ const sendUpdatedCards = async () => {
     })
   );
 
-  await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses }); // ✅ CORRETO!
+  console.log(
+    "REusltado do PUB",
+    await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses })
+  );
+  console.log(
+    "REusltado do PUB com json forçado: ",
+    await pubsub.publish(CARD_UPDATED, {
+      card: JSON.stringify(cardsWithAddresses),
+    })
+  );
+
+  await pubsub.publish(CARD_UPDATED, {
+    card: cardsWithAddresses, // ✅ Enviar como objeto, não como string!
+  });
 
   return cardsWithAddresses;
 };
@@ -289,23 +302,22 @@ const cardResolver = {
     },
   },
 
-  // Subscription: {
-  //   card: {
-  //     subscribe: async () => {
-  //       console.log("Nova inscrição para a subscription CARD_UPDATED");
-  //       return pubsub.asyncIterableIterator([CARD_UPDATED]);
-  //     },
-  //   },
-  // },
-
   Subscription: {
     card: {
       subscribe: async () => {
-        console.log("📡 Nova inscrição para a subscription CARD_UPDATED");
-        return pubsub.asyncIterator([CARD_UPDATED]); // Use asyncIterator
+        console.log("Nova inscrição para a subscription CARD_UPDATED");
+        return pubsub.asyncIterableIterator([CARD_UPDATED]);
       },
     },
   },
 };
+// Subscription: {
+//   card: {
+//     subscribe: async () => {
+//       console.log("📡 Nova inscrição para a subscription CARD_UPDATED");
+//       return pubsub.asyncIterator([CARD_UPDATED]); // Use asyncIterator
+//     },
+//   },
+// },
 
 export default cardResolver;
