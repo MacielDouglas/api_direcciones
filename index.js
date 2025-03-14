@@ -73,9 +73,13 @@ const startServer = async () => {
 
   // Configurar o CORS para produção
   const corsOptions = {
-    origin: NODE_ENV === "production" ? CLIENT_ORIGIN : "*", // Permitir apenas a origem do front-end em produção
+    origin: ["http://localhost:5173", "https://direcciones.vercel.app/"],
     credentials: true,
   };
+  // const corsOptions = {
+  //   origin: NODE_ENV === "production" ? CLIENT_ORIGIN : "*", // Permitir apenas a origem do front-end em produção
+  //   credentials: true,
+  // };
 
   // Middleware para o Apollo Server
   app.use(
