@@ -29,19 +29,15 @@ const sendUpdatedCards = async () => {
       };
     })
   );
-  console.log("Antes de publicar:", cardsWithAddresses);
 
-  await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
-  console.log("Após publicar.");
-
-  // Verifique os dados antes de publicar
   console.log(
-    "Data to be published: ",
+    "Publishing updated cards",
     JSON.stringify(cardsWithAddresses, null, 2)
-  );
-
-  await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
-  return cardsWithAddresses; // Adiciona o retorno para a lista de cards
+  ); // Força JSON legível
+  await pubsub.publish(CARD_UPDATED, {
+    card: JSON.stringify(cardsWithAddresses),
+  }); // Stringify JSON antes de publicar
+  return cardsWithAddresses;
 };
 
 const cardResolver = {

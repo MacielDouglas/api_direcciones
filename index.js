@@ -50,6 +50,16 @@ const startServer = async () => {
   await connectToDatabase();
 
   const app = express();
+  app.use(express.json()); // Middleware para processar JSON corretamente
+  app.use(express.urlencoded({ extended: true })); // Para garantir que URL encoded também funcione
+  app.use(express.text()); // Para garantir que strings simples sejam processadas corretamente
+  app.use(express.raw()); // Apenas se necessário para binários
+
+  app.use((req, res, next) => {
+    res.setHeader("Content-Type", "application/json");
+    next();
+  });
+
   const httpServer = http.createServer(app);
   const { server, schema } = await createApolloServer();
 
