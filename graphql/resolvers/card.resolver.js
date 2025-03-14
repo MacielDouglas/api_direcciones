@@ -29,7 +29,17 @@ const sendUpdatedCards = async () => {
       };
     })
   );
-  console.log("Publishing updated cards", cardsWithAddresses);
+  console.log("Antes de publicar:", cardsWithAddresses);
+
+  await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
+  console.log("Após publicar.");
+
+  // Verifique os dados antes de publicar
+  console.log(
+    "Data to be published: ",
+    JSON.stringify(cardsWithAddresses, null, 2)
+  );
+
   await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
   return cardsWithAddresses; // Adiciona o retorno para a lista de cards
 };
@@ -290,7 +300,10 @@ const cardResolver = {
 
   Subscription: {
     card: {
-      subscribe: () => pubsub.asyncIterableIterator([CARD_UPDATED]),
+      subscribe: async () => {
+        console.log("Nova inscrição para a subscription CARD_UPDATED");
+        return pubsub.asyncIterableIterator([CARD_UPDATED]);
+      },
     },
   },
 };
