@@ -304,9 +304,10 @@ const cardResolver = {
 
   Subscription: {
     card: {
-      subscribe: async () => {
-        console.log("Nova inscrição para a subscription CARD_UPDATED");
-        return pubsub.asyncIterableIterator([CARD_UPDATED]);
+      subscribe: () => pubsub.asyncIterableIterator([CARD_UPDATED]),
+      resolve: (payload) => {
+        console.log("🔹 Dados enviados para o cliente:", payload);
+        return JSON.parse(JSON.stringify(payload)); // Garante que seja JSON válido
       },
     },
   },
