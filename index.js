@@ -60,6 +60,7 @@ const startServer = async () => {
   const wsServer = new WebSocketServer({
     server: httpServer,
     path: "/graphql",
+    perMessageDeflate: false, // Evita problemas de compressão com proxies
   });
 
   // Configurar o uso do WebSocket Server com o schema e o contexto
@@ -113,6 +114,8 @@ const startServer = async () => {
     res.send("Servidor rodando!");
   });
 
+  app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+
   // Iniciar o servidor
   httpServer.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
@@ -121,16 +124,18 @@ const startServer = async () => {
   });
 };
 
-// Iniciar o servidor em modo de desenvolvimento
-if (NODE_ENV !== "production") {
-  startServer();
-}
+startServer();
+// // Iniciar o servidor em modo de desenvolvimento
 
-// Exportar o servidor para o Railway
-export default async (req, res) => {
-  await startServer();
-  res.end("Servidor iniciado com sucesso!");
-};
+// if (NODE_ENV !== "production") {
+//   startServer();
+// }
+
+// // Exportar o servidor para o Railway
+// export default async (req, res) => {
+//   await startServer();
+//   res.end("Servidor iniciado com sucesso!");
+// };
 
 // import express from "express";
 // import cors from "cors";
