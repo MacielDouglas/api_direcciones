@@ -82,10 +82,11 @@ const startServer = async () => {
       schema,
       context: async () => {
         console.log("📡 Um novo cliente se conectou ao WebSocket");
-        return { pubsub }; // Passando corretamente o pubsub
+        return { pubsub };
       },
       onConnect: () => console.log("✅ Cliente WebSocket conectado"),
       onDisconnect: () => console.log("🔴 Cliente WebSocket desconectado"),
+      keepAlive: 10000, // Mantém a conexão ativa a cada 10s
     },
     wsServer
   );
@@ -97,12 +98,20 @@ const startServer = async () => {
 
   app.use(cors({ origin: allowedOrigins, credentials: true }));
 
+  app.use((req, res, next) => {
+    res.setHeader("Content-Type", "application/json");
+    next();
+  });
+
   // Middleware para o Apollo Server
   app.use(
     "/graphql",
     express.json(),
     expressMiddleware(server, {
-      context: ({ req, res }) => ({ req, res, pubsub }),
+      context: ({ req, res }) => {
+        res.setHeader("Content-Type", "application/json"); // Garante que todas as respostas são JSON
+        return { req, res, pubsub };
+      },
     })
   );
 

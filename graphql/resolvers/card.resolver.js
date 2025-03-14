@@ -30,13 +30,8 @@ const sendUpdatedCards = async () => {
     })
   );
 
-  console.log(
-    "Publishing updated cards",
-    JSON.stringify(cardsWithAddresses, null, 2)
-  ); // Força JSON legível
-  await pubsub.publish(CARD_UPDATED, {
-    card: JSON.stringify(cardsWithAddresses),
-  }); // Stringify JSON antes de publicar
+  await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses }); // ✅ CORRETO!
+
   return cardsWithAddresses;
 };
 
@@ -294,11 +289,20 @@ const cardResolver = {
     },
   },
 
+  // Subscription: {
+  //   card: {
+  //     subscribe: async () => {
+  //       console.log("Nova inscrição para a subscription CARD_UPDATED");
+  //       return pubsub.asyncIterableIterator([CARD_UPDATED]);
+  //     },
+  //   },
+  // },
+
   Subscription: {
     card: {
       subscribe: async () => {
-        console.log("Nova inscrição para a subscription CARD_UPDATED");
-        return pubsub.asyncIterableIterator([CARD_UPDATED]);
+        console.log("📡 Nova inscrição para a subscription CARD_UPDATED");
+        return pubsub.asyncIterator([CARD_UPDATED]); // Use asyncIterator
       },
     },
   },
