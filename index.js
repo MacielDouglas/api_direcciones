@@ -72,19 +72,29 @@ const startServer = async () => {
   );
 
   // Configurar o CORS para produção
+  const allowedOrigins = CLIENT_ORIGIN
+    ? CLIENT_ORIGIN.split(",")
+    : ["http://localhost:5173", "https://direcciones.vercel.app"];
+
   const corsOptions = {
-    origin: ["http://localhost:5173", "https://direcciones.vercel.app/"],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   };
-  // const corsOptions = {
-  //   origin: NODE_ENV === "production" ? CLIENT_ORIGIN : "*", // Permitir apenas a origem do front-end em produção
-  //   credentials: true,
-  // };
+
+  app.use(cors(corsOptions));
+  app.options("*", cors(corsOptions));
 
   // Middleware para o Apollo Server
   app.use(
     "/graphql",
-    cors(corsOptions),
     express.json(),
     expressMiddleware(server, {
       context: ({ req, res }) => ({ req, res, pubsub }), // Passar o pubsub para o contexto
@@ -111,8 +121,8 @@ if (NODE_ENV !== "production") {
 
 // Exportar o servidor para o Railway
 export default async (req, res) => {
-  const httpServer = await startServer();
-  httpServer.emit("request", req, res);
+  await startServer();
+  res.end("Servidor iniciado com sucesso!");
 };
 
 // import express from "express";
