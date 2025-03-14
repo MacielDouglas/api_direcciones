@@ -8,12 +8,7 @@ import {
   verifyAuthorization,
 } from "../../utils/utils.js";
 import { pubsub } from "../../index.js";
-// import { PubSub } from "graphql-subscriptions";
 
-// Ensure PubSub is properly initialized
-// const pubsub = new PubSub();
-
-// const pubsub = new PubSub();
 const CARD_UPDATED = "CARD_UPDATED";
 
 const sendUpdatedCards = async () => {
@@ -34,6 +29,7 @@ const sendUpdatedCards = async () => {
       };
     })
   );
+  console.log("Publishing updated cards", cardsWithAddresses);
   await pubsub.publish(CARD_UPDATED, { card: cardsWithAddresses });
   return cardsWithAddresses; // Adiciona o retorno para a lista de cards
 };

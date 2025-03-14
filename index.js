@@ -60,6 +60,13 @@ const startServer = async () => {
     perMessageDeflate: false,
   });
 
+  wsServer.on("connection", (socket) => {
+    socket.on("message", (message) => {
+      // Verifique se a mensagem está sendo recebida corretamente
+      console.log(message);
+    });
+  });
+
   useServer(
     {
       schema,
