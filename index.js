@@ -76,21 +76,28 @@ const startServer = async () => {
     ? CLIENT_ORIGIN.split(",")
     : ["http://localhost:5173", "https://direcciones.vercel.app"];
 
-  const corsOptions = {
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  };
+  // const corsOptions = {
+  //   origin: function (origin, callback) {
+  //     if (!origin || allowedOrigins.includes(origin)) {
+  //       callback(null, true);
+  //     } else {
+  //       callback(new Error("Not allowed by CORS"));
+  //     }
+  //   },
+  //   credentials: true,
+  //   methods: ["GET", "POST", "OPTIONS"],
+  //   allowedHeaders: ["Content-Type", "Authorization"],
+  // };
 
-  app.use(cors(corsOptions));
-  app.options("*", cors(corsOptions));
+  // app.use(cors(corsOptions));
+  // app.options("*", cors(corsOptions));
+
+  app.use(
+    cors({
+      origin: ["http://localhost:5173", "https://direcciones.vercel.app"], // Adicione os domínios necessários
+      credentials: true, // Permite cookies e autenticação
+    })
+  );
 
   // Middleware para o Apollo Server
   app.use(
