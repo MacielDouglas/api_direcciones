@@ -57,9 +57,21 @@ const startServer = async () => {
   const wsServer = new WebSocketServer({
     server: httpServer,
     path: "/graphql",
+    perMessageDeflate: false,
   });
 
-  useServer({ schema, context: () => ({ pubsub }) }, wsServer);
+  useServer(
+    {
+      schema,
+      context: async () => {
+        console.log("📡 Um novo cliente se conectou ao WebSocket");
+        return { pubsub }; // Passando corretamente o pubsub
+      },
+      onConnect: () => console.log("✅ Cliente WebSocket conectado"),
+      onDisconnect: () => console.log("🔴 Cliente WebSocket desconectado"),
+    },
+    wsServer
+  );
 
   // Configuração de CORS para aceitar requisições do frontend
   const allowedOrigins = CLIENT_ORIGIN
